@@ -129,33 +129,31 @@ for epoch in range(epochs):
         optimizer_motion.zero_grad()
         optimizer_decoder.zero_grad()
 
-        print("train_motion_batch: ", train_motion_batch.shape)
-        print("motions_attention_mask_batch: ", motions_attention_mask_batch.shape)
-
+        print("train_motion_batch.shape: ", train_motion_batch.shape)
         # Tokenize descriptions dynamically
         inputs = bert_tokenizer(train_descriptions_batch, return_tensors="pt", padding=True, truncation=True, max_length=512)
         with torch.no_grad():
                 bert_embeddings = bert_model(**inputs).last_hidden_state.float()
                 bert_embeddings_mask = inputs.attention_mask.to(dtype=bool)
         text_embeddings = bert_embeddings / bert_embeddings.norm(dim=-1, keepdim=True)
-        print("text_embeddings: ",text_embeddings.shape)
+        print("text_embeddings.shape: ",text_embeddings.shape)
         mu_text, var_text = text_encoder.forward(text_embeddings, bert_embeddings_mask)
-        print("mu_text: ",mu_text.shape)
+        print("mu_text.shape: ",mu_text.shape)
 
         train_motion_batch = train_motion_batch.view(train_motion_batch.shape[0], train_motion_batch.shape[1], -1)
         mu_motion, var_motion = motion_encoder.forward(train_motion_batch, motions_attention_mask_batch)
-        print("mu_motion: ",mu_motion.shape)
+        print("mu_motion.shape: ",mu_motion.shape)
 
         z_text = utils.reparametrization(mu_text, var_text)
         z_motion = utils.reparametrization(mu_motion, var_motion)
-        print("z_text: ",z_text.shape)
+        print("z_text.shape: ",z_text.shape)
 
         input_pos = torch.tensor(np.arange(0, train_motion_batch.shape[1])).unsqueeze(0).unsqueeze(2)
         input_pos = input_pos.expand(batch_size, train_motion_batch.shape[1], 1)
-        print("input_pos:", input_pos.shape)
+        print("input_pos.shape:", input_pos.shape)
         motion_from_text = motion_decoder.forward(input_pos, z_text, None, None)
         motion_from_motion = motion_decoder.forward(input_pos, z_motion, None, None)
-        print("motion_from_text:", motion_from_text.shape)
+        print("motion_from_text.shape:", motion_from_text.shape)
         loss = losses.train_loss(
             motion_from_text, 
             motion_from_motion, 
