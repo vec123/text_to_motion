@@ -4,7 +4,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import os
 from matplotlib.animation import FuncAnimation
-from transformers import CLIPTokenizer, CLIPModel, BertTokenizer, BertModel
+from transformers import AutoTokenizer, AutoModel
+from transformers import logging
 import torch
 import motion_models
 import utils
@@ -32,7 +33,7 @@ encoded_dim = 768
 motion_feature_dim = 63
 embed_size = 8
 num_layers = 8
-num_latents = 3 
+num_latents = 3
 dim_latent = 2
 heads = 8
 forward_expansion = 1
@@ -41,9 +42,10 @@ dropout = 0.1
 
 #--------------Models
 
-bert_model_name = "bert-base-uncased"
-bert_tokenizer = BertTokenizer.from_pretrained(bert_model_name)
-bert_model = BertModel.from_pretrained(bert_model_name)
+modelpath = "bert-base-uncased"
+bert_tokenizer = AutoTokenizer.from_pretrained(modelpath)
+bert_model = AutoModel.from_pretrained(modelpath)
+
 
 text_encoder = motion_models.Text_encoder_transformers(
          encoded_dim,
@@ -92,7 +94,7 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Dataset
 
 # Define training parameters
-epochs = 3  # Set desired epochs
+epochs = 1  # Set desired epochs
 save_epochs = 1  # Save models and plot every 'save_epochs' epochs
 
 # Custom dataset to tokenize descriptions on-the-fly
@@ -134,9 +136,10 @@ for epoch in range(epochs):
         inputs = bert_tokenizer(train_descriptions_batch, return_tensors="pt", padding=True, truncation=True, max_length=512)
         with torch.no_grad():
                 bert_embeddings = bert_model(**inputs).last_hidden_state.float()
+                bert_embeddings_mask = inputs.attention_mask.to(dtype=bool)
         text_embeddings = bert_embeddings / bert_embeddings.norm(dim=-1, keepdim=True)
         print("text_embeddings: ",text_embeddings.shape)
-        mu_text, var_text = text_encoder.forward(text_embeddings, None)
+        mu_text, var_text = text_encoder.forward(text_embeddings, bert_embeddings_mask)
         print("mu_text: ",mu_text.shape)
 
         train_motion_batch = train_motion_batch.view(train_motion_batch.shape[0], train_motion_batch.shape[1], -1)
@@ -172,6 +175,7 @@ for epoch in range(epochs):
         
         total_losses.append(loss.item())
         print("loss:", loss)
+        break
     print(f"Epoch {epoch+1}/{epochs}, Loss: {loss.item()}")
 
     # Save models and plot every 'save_epochs' epochs

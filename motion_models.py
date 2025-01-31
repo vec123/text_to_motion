@@ -20,7 +20,7 @@ class Motion_encoder_transformers(nn.Module):
        
        super(Motion_encoder_transformers, self).__init__()
        self.device = device
-       self.mean_encoder = transformer_modules.Motion_Encoder(
+       self.encoder = transformer_modules.Motion_Encoder_tokens(
          src_vocab_size,
          embed_size,
          dim_latent,
@@ -31,22 +31,9 @@ class Motion_encoder_transformers(nn.Module):
          forward_expansion,
          dropout,
          max_length)
-       self.logvar_encoder = transformer_modules.Motion_Encoder(
-         src_vocab_size,
-         embed_size,
-         dim_latent,
-         num_latents,
-         num_layers,
-         heads,
-         device,
-         forward_expansion,
-         dropout,
-         max_length)
-    
+      
     def forward(self, motion, motion_mask):
-        out_mean = self.mean_encoder(motion, motion_mask)
-        out_logvar = self.logvar_encoder(motion, motion_mask)
-       
+        out_mean,out_logvar = self.encoder(motion, motion_mask) 
         return out_mean, out_logvar
 
 class Text_encoder_transformers(nn.Module):
@@ -62,7 +49,7 @@ class Text_encoder_transformers(nn.Module):
          dropout
         ):
        super(Text_encoder_transformers, self).__init__()
-       self.mean_encoder = transformer_modules.Text_Encoder(
+       self.encoder = transformer_modules.Text_Encoder_tokens(
          encoded_dim,
          embed_size,
          dim_latent,
@@ -73,21 +60,9 @@ class Text_encoder_transformers(nn.Module):
          forward_expansion,
          dropout)
        
-       self.logvar_encoder = transformer_modules.Text_Encoder(
-         encoded_dim,
-         embed_size,
-         dim_latent,
-         num_latents,
-         num_layers,
-         heads,
-         device,
-         forward_expansion,
-         dropout)
-    
-
+       
     def forward(self, text_embeddings, text_mask):
-        out_mean = self.mean_encoder(text_embeddings, text_mask)
-        out_logvar = self.logvar_encoder(text_embeddings, text_mask)
+        out_mean, out_logvar = self.encoder(text_embeddings, text_mask)
         return out_mean, out_logvar
 
 class Motion_decoder_transformers(nn.Module):

@@ -165,6 +165,8 @@ class AttentionPooling_old(nn.Module):
        
          return output
 
+
+
 class Motion_Encoder(nn.Module):
 
    def __init__(
@@ -200,11 +202,12 @@ class Motion_Encoder(nn.Module):
             for _ in range(num_layers) ]
         )
       self.dropout = nn.Dropout(dropout)
-   
-   def forward(self, x, mask):
 
+   def forward(self, x, mask):
+       
        motion_embedding = self.motion_embedding(x)
        out = self.sequence_pos_encoding(motion_embedding)
+
        for i,layer in enumerate(self.layers):
           out = layer(out, out, out, mask)
        out = self.attention_pool(out, mask)
@@ -300,12 +303,126 @@ class Motion_Decoder(nn.Module):
       out = self.final_projection(out)   
       return out
    
+class Motion_Encoder_tokens(nn.Module):
+
+   def __init__(
+         self,
+         motion_feature_dim,
+         embed_size,
+         dim_latent,
+         num_latents,
+         num_layers,
+         heads,
+         device,
+         forward_expansion,
+         dropout,
+         max_length
+    ):
+      super(Motion_Encoder_tokens, self).__init__()
+      self.embed_size = embed_size
+      self.num_latents = num_latents
+      self.device = device
+      self.motion_feature_dim = motion_feature_dim
+      self.embed_size = embed_size
+      self.max_length = max_length
+      self.motion_embedding = nn.Linear(motion_feature_dim, embed_size)
+      self.sequence_pos_encoding = utils.PositionalEncoding(embed_size, dropout)
+      self.layers = nn.ModuleList(
+        [
+            TransformerBlock(
+            embed_size,
+            heads,
+            dropout = dropout,
+            forward_expansion = forward_expansion,
+            )  
+            for _ in range(num_layers) ]
+        )
+      self.dropout = nn.Dropout(dropout)
+
+      self.mu_token = nn.Parameter(torch.randn(num_latents,embed_size))
+      self.logvar_token = nn.Parameter(torch.randn(num_latents,embed_size))
+      self.latent_projector = nn.Linear(embed_size, dim_latent)
+
+   def forward(self, x, mask):
+       bs, nframes, nfeats = x.shape
+       mu_token = torch.tile(self.mu_token, (bs,)).reshape(bs, self.mu_token.shape[0],self.mu_token.shape[1])
+       logvar_token =  torch.tile(self.logvar_token, (bs,)).reshape(bs, self.logvar_token.shape[0],self.logvar_token.shape[1])
+       motion_embedding = self.motion_embedding(x)
+
+       x = torch.cat((mu_token, logvar_token, motion_embedding), 1)
+   
+       token_mask = torch.ones((bs, 2*self.num_latents), dtype=bool, device=x.device).unsqueeze(1).unsqueeze(2)
+       mask = torch.cat((token_mask, mask), 3)
+  
+       out = self.sequence_pos_encoding(x)
+       for i,layer in enumerate(self.layers):
+          out = layer(out, out, out, mask)
+       mu, logvar = out[:,0:self.num_latents,:], out[:,self.num_latents:2*self.num_latents,:]
+
+       mu = self.latent_projector(mu)
+       logvar = self.latent_projector(logvar)
+       return mu, logvar
+
+class Text_Encoder_tokens(nn.Module):   
+
+   def __init__(
+         self,
+         encoded_dim,
+         embed_size,
+         dim_latent,
+         num_latents,
+         num_layers,
+         heads,
+         device,
+         forward_expansion,
+         dropout
+    ):
+      super(Text_Encoder_tokens, self).__init__()
+      self.embed_size = embed_size
+      self.num_latents = num_latents
+      self.device = device
+      self.sequence_pos_encoding = utils.PositionalEncoding(embed_size, dropout)
+      self.projection = nn.Sequential(nn.ReLU(),nn.Linear(encoded_dim, embed_size))
+      self.layers = nn.ModuleList(
+        [
+            TransformerBlock(
+            embed_size,
+            heads,
+            dropout = dropout,
+            forward_expansion = forward_expansion,
+            )  
+            for _ in range(num_layers) ]
+        )
+      self.dropout = nn.Dropout(dropout)
+
+      self.mu_token = nn.Parameter(torch.randn(num_latents,embed_size))
+      self.logvar_token = nn.Parameter(torch.randn(num_latents,embed_size))
+      self.latent_projector = nn.Linear(embed_size, dim_latent)
+
+   def forward(self, x, mask):
+       bs, nframes, nfeats = x.shape
+       mu_token = torch.tile(self.mu_token, (bs,)).reshape(bs, self.mu_token.shape[0],self.mu_token.shape[1])
+       logvar_token =  torch.tile(self.logvar_token, (bs,)).reshape(bs, self.logvar_token.shape[0],self.logvar_token.shape[1])
+       text_encoding = self.projection(x)
+
+       x = torch.cat((mu_token, logvar_token, text_encoding), 1)
+       token_mask = torch.ones((bs, 2*self.num_latents), dtype=bool, device=x.device)
+       mask = torch.cat((token_mask, mask), 1).unsqueeze(1).unsqueeze(2) 
+
+       out = self.sequence_pos_encoding(x)
+       for layer in self.layers:
+          out = layer(out, out, out, mask)
+       mu, logvar = out[:,0:self.num_latents,:], out[:,self.num_latents:2*self.num_latents,:]
+
+       mu = self.latent_projector(mu)
+       logvar = self.latent_projector(logvar)
+       return mu, logvar
+
 #----------------not needed for the task----------------
 class Encoder(nn.Module):
    
    def __init__(
          self,
-         src_vocab_size,
          embed_size,
          num_layers,
          heads,
