@@ -180,16 +180,20 @@ for epoch in range(epochs):
 
     # Save models and plot every 'save_epochs' epochs
     if (epoch + 1) % save_epochs == 0:
-        torch.save(text_encoder.state_dict(), f"text_encoder_epoch_{epoch+1}.pth")
-        torch.save(motion_encoder.state_dict(), f"motion_encoder_epoch_{epoch+1}.pth")
-        torch.save(motion_decoder.state_dict(), f"motion_decoder_epoch_{epoch+1}.pth")
+        model_dir = "saved_models"
+        os.makedirs(model_dir, exist_ok=True)
+        torch.save(text_encoder.state_dict(), model_dir + f"/text_encoder_epoch_{epoch+1}.pth")
+        torch.save(motion_encoder.state_dict(), model_dir + f"/motion_encoder_epoch_{epoch+1}.pth")
+        torch.save(motion_decoder.state_dict(), model_dir + f"/motion_decoder_epoch_{epoch+1}.pth")
         
         # Plot total loss
+        plot_dir = "plots"
+        os.makedirs(plot_dir, exist_ok=True)
         plt.figure()
         plt.plot(range(1, len(total_losses) + 1), total_losses, label="Training Loss")
         plt.xlabel("Epochs")
         plt.ylabel("Loss")
         plt.legend()
         plt.title("Training Loss Over Time")
-        plt.savefig(f"training_loss_epoch_{epoch+1}.png")
+        plt.savefig(plot_dir + f"/training_loss_epoch_{epoch+1}.png")
         plt.close()
